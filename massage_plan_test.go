@@ -43,7 +43,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	}
 	require.True(mp.isRelaxed())
 	require.False(mp.isTired())
-	require.False(mp.IsTiredCountExceedLimit())
+	require.False(mp.IsHighLoad())
 	require.True(mp.oldestTiredTime.IsZero())
 	require.True(mp.latestTiredTime.IsZero())
 	require.True(mp.currentCPUsageRecordTime.IsZero())
@@ -59,30 +59,30 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	}
 	require.True(mp.isRelaxed())
 	require.False(mp.isTired())
-	require.False(mp.IsTiredCountExceedLimit())
+	require.False(mp.IsHighLoad())
 	require.True(mp.oldestTiredTime.IsZero())
 	require.True(mp.latestTiredTime.IsZero())
 	require.False(mp.currentCPUsageRecordTime.IsZero())
-	require.Equal(uint64(collectCounts)+1, mp.todoTaskNum())
-	require.Equal(uint64(collectCounts)+1, mp.doneTaskNum())
+	require.Equal(uint64(0), mp.todoTaskNum())
+	require.Equal(uint64(0), mp.doneTaskNum())
 
 	// tiredRatio 0.60
 	mp.AddACPUsageRecord()
 	require.True(mp.isRelaxed())
 	require.False(mp.isTired())
-	require.False(mp.IsTiredCountExceedLimit())
+	require.False(mp.IsHighLoad())
 	require.True(mp.oldestTiredTime.IsZero())
 	require.True(mp.latestTiredTime.IsZero())
 	require.False(mp.currentCPUsageRecordTime.IsZero())
 	require.False(mp.NeedMassage())
-	require.Equal(uint64(collectCounts)+2, mp.todoTaskNum())
-	require.Equal(uint64(collectCounts)+2, mp.doneTaskNum())
+	require.Equal(uint64(0), mp.todoTaskNum())
+	require.Equal(uint64(0), mp.doneTaskNum())
 
 	// tiredRatio 0.61
 	mp.AddACPUsageRecord()
 	require.False(mp.isRelaxed())
 	require.True(mp.isTired())
-	require.True(mp.IsTiredCountExceedLimit())
+	require.True(mp.IsHighLoad())
 	require.False(mp.oldestTiredTime.IsZero())
 	require.False(mp.latestTiredTime.IsZero())
 	require.False(mp.currentCPUsageRecordTime.IsZero())
@@ -160,7 +160,7 @@ func TestIncreaseIntensity(t *testing.T) {
 		"currentIntensity:%d not equal", mp.currentIntensity)
 }
 
-func TestIsOldestTiredTimeExceedCheckPeriod(t *testing.T) {
+func TestIsHighLoadDurationExceedCheckPeriod(t *testing.T) {
 	periodInSecond := 10
 	curTime := time.Now()
 	mp := massagePlan{
@@ -168,11 +168,13 @@ func TestIsOldestTiredTimeExceedCheckPeriod(t *testing.T) {
 		oldestTiredTime:          time.Unix(0, curTime.UnixNano()-int64(periodInSecond)*1e9-1),
 		checkPeriodInSeconds:     uint(periodInSecond),
 	}
-	assert.Truef(t, mp.IsOldestTiredTimeExceedCheckPeriod(),
-		"curTime:%v, oldestTiredTime:%v, period:%v", mp.currentCPUsageRecordTime, mp.oldestTiredTime, mp.currentCPUsageRecordTime.Sub(mp.oldestTiredTime))
+	require.Truef(t, mp.IsHighLoadDurationExceedCheckPeriod(),
+		"curTime:%v, oldestTiredTime:%v, period:%v",
+		mp.currentCPUsageRecordTime, mp.oldestTiredTime,
+		mp.currentCPUsageRecordTime.Sub(mp.oldestTiredTime))
 }
 
-func TestIsLatestTiredTimeExceedCheckPeriod(t *testing.T) {
+func TestIsLowLoadDurationExceedCheckPeriod(t *testing.T) {
 	periodInSecond := 10
 	curTime := time.Now()
 	mp := massagePlan{
@@ -180,11 +182,13 @@ func TestIsLatestTiredTimeExceedCheckPeriod(t *testing.T) {
 		latestTiredTime:          time.Unix(0, curTime.UnixNano()-int64(periodInSecond)*1e9-1),
 		checkPeriodInSeconds:     uint(periodInSecond),
 	}
-	assert.Truef(t, mp.IsLatestTiredTimeExceedCheckPeriod(),
-		"curTime:%v, oldestTiredTime:%v, period:%v", mp.currentCPUsageRecordTime, mp.oldestTiredTime, mp.currentCPUsageRecordTime.Sub(mp.oldestTiredTime))
+	assert.Truef(t, mp.IsLowLoadDurationExceedCheckPeriod(),
+		"curTime:%v, oldestTiredTime:%v, period:%v",
+		mp.currentCPUsageRecordTime, mp.oldestTiredTime,
+		mp.currentCPUsageRecordTime.Sub(mp.oldestTiredTime))
 }
 
-func TestCanDoWork(t *testing.T) {
+func TestCanDoWorkInTired(t *testing.T) {
 	require := assert.New(t)
 	mp := massagePlan{
 		initialIntensity: 50,
@@ -195,8 +199,8 @@ func TestCanDoWork(t *testing.T) {
 	require.Equal(uint64(0), mp.todoTaskNum())
 	require.Equal(uint64(0), mp.doneTaskNum())
 	require.False(mp.NeedMassage())
-	require.Equal(uint64(1), mp.todoTaskNum())
-	require.Equal(uint64(1), mp.doneTaskNum())
+	require.Equal(uint64(0), mp.todoTaskNum())
+	require.Equal(uint64(0), mp.doneTaskNum())
 
 	// 疲劳状态下50%的概率丢包
 	mp.SetTired()
@@ -209,6 +213,8 @@ func TestCanDoWork(t *testing.T) {
 			require.False(mp.NeedMassage())
 		}
 	}
+	require.Equal(uint64(100), mp.todoTaskNum())
+	require.Equal(uint64(50), mp.doneTaskNum())
 
 	// 疲劳状态下60%的概率丢包
 	mp.IncreaseIntensity()
@@ -225,4 +231,6 @@ func TestCanDoWork(t *testing.T) {
 			assert.Truef(t, mp.NeedMassage(), "error in ite:%d, unit:%s", i, unit)
 		}
 	}
+	require.Equal(uint64(100), mp.todoTaskNum())
+	require.Equal(uint64(40), mp.doneTaskNum())
 }

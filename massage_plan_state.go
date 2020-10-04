@@ -10,9 +10,7 @@ type massagePlanState interface {
 type stateRelaxed struct{}
 
 func (s stateRelaxed) AddACPUsageRecord(p *massagePlan) {
-	if p.IsTiredCountExceedLimit() {
-		p.UpdateLatestTiredTime()
-		p.UpdateOldestTiredTime()
+	if p.IsHighLoad() {
 		p.SetTired()
 	}
 }
@@ -21,13 +19,13 @@ func (s stateRelaxed) AddACPUsageRecord(p *massagePlan) {
 type stateTired struct{}
 
 func (s stateTired) AddACPUsageRecord(p *massagePlan) {
-	if p.IsTiredCountExceedLimit() {
+	if p.IsHighLoad() {
 		p.UpdateLatestTiredTime()
-		if p.IsOldestTiredTimeExceedCheckPeriod() {
+		if p.IsHighLoadDurationExceedCheckPeriod() {
 			p.IncreaseIntensity()
 		}
 	} else {
-		if p.IsLatestTiredTimeExceedCheckPeriod() {
+		if p.IsLowLoadDurationExceedCheckPeriod() {
 			p.DecreaseIntensity()
 		}
 	}
