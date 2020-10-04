@@ -136,7 +136,7 @@ func (p *massagePlan) StartLinux() error {
 		defaultCheckPeriodInSeconds)
 }
 
-func (p *massagePlan) IsTiredCountExceedLimit() bool {
+func (p *massagePlan) IsHighLoad() bool {
 	tiredCount := p.cpusageRecorder.getRecordNumOfCounterType(p.tirenessLevel)
 	const recordSum = 100
 	if tiredCount > int(recordSum*p.tiredRatio) {
@@ -145,12 +145,12 @@ func (p *massagePlan) IsTiredCountExceedLimit() bool {
 	return false
 }
 
-func (p *massagePlan) IsOldestTiredTimeExceedCheckPeriod() bool {
+func (p *massagePlan) IsHighLoadDurationExceedCheckPeriod() bool {
 	period := p.currentCPUsageRecordTime.Sub(p.oldestTiredTime)
 	return period > time.Second*time.Duration(p.checkPeriodInSeconds)
 }
 
-func (p *massagePlan) IsLatestTiredTimeExceedCheckPeriod() bool {
+func (p *massagePlan) IsLowLoadDurationExceedCheckPeriod() bool {
 	period := p.currentCPUsageRecordTime.Sub(p.latestTiredTime)
 	return period > time.Second*time.Duration(p.checkPeriodInSeconds)
 }
@@ -166,6 +166,9 @@ func (p *massagePlan) SetRelaxed() {
 
 func (p *massagePlan) SetTired() {
 	p.currentState = stateTired{}
+	p.currentIntensity = p.initialIntensity
+	p.UpdateLatestTiredTime()
+	p.UpdateOldestTiredTime()
 	p.clearWorkspace()
 }
 
@@ -242,23 +245,21 @@ func (p *massagePlan) doneTaskNum() uint64 {
 	return atomic.LoadUint64(&p.doneTasks)
 }
 
-func (p *massagePlan) canDoWork() bool {
-	if p.isRelaxed() {
-		return true
-	}
-
+func (p *massagePlan) canDoWorkInTired() bool {
+	p.addANewTask()
 	requireTasks := p.todoTaskNum() * (fullIntensity - uint64(p.currentIntensity)) / fullIntensity
 	if p.doneTaskNum() < requireTasks {
+		p.finishATask()
 		return true
 	}
-
 	return false
 }
 
 func (p *massagePlan) NeedMassage() bool {
-	p.addANewTask()
-	if p.canDoWork() {
-		p.finishATask()
+	if p.isRelaxed() {
+		return false
+	}
+	if p.canDoWorkInTired() {
 		return false
 	}
 	return true
