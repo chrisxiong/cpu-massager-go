@@ -116,5 +116,5 @@ CPU状态由轻松到疲累状态比较简单，CPU使用率采集器每个定�
 CPU处于疲累状态时，会根据如下几个方式来决定是否需要拒绝服务：
 1. todoTasks，待处理任务数，疲累状态下每调用一次NeedMassage()就会加1；
 2. doneTasks，已完成任务数，疲累状态下每次调用NeedMassage()返回false的情况下就会加1；
-3. requireTasks，需要完成的任务数，用如下共识计算得到：todoTasks * (100 - currentIntensity) / 100；
+3. requireTasks，需要完成的任务数，用如下公式计算得到：todoTasks * (100 - currentIntensity) / 100；
 4. 如果doneTasks < requireTasks，则需要提供服务，否则拒绝服务。
