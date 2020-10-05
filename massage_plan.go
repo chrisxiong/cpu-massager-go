@@ -124,9 +124,9 @@ func (p *massagePlan) StartLinux() error {
 		return fmt.Errorf("NewLinuxCPUsageCollector error:%s", err.Error())
 	}
 	const defaultTirenesLevel = CounterTypeFifty
-	const defaultInitialIntensity = 80
-	const defaultStepIntensity = 20
-	const defaultTiredRatio = 0.8
+	const defaultInitialIntensity = 50
+	const defaultStepIntensity = 10
+	const defaultTiredRatio = 0.6
 	const defaultCheckPeriodInSeconds = 10
 	return p.Start(linuxCPUsageCollector,
 		defaultTirenesLevel,
