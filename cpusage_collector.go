@@ -26,7 +26,7 @@ type linuxCPUData struct {
 	total     uint64
 }
 
-// getCurCPUData 获取当前的linuxCPUData
+// getCurLinuxCPUData 获取当前的linuxCPUData
 func getCurLinuxCPUData() (*linuxCPUData, error) {
 	d := &linuxCPUData{}
 	statFile, err := os.Open("/proc/stat")

@@ -56,8 +56,8 @@ func allCounterTypes() []CounterType {
 	}
 }
 
-// addRecord 添加一条cpu使用率的记录
-func (r *cpusageRecorder) addRecord(cpusage float64) {
+// AddRecord 添加一条cpu使用率的记录
+func (r *cpusageRecorder) AddRecord(cpusage float64) {
 	if cpusage < 0 || cpusage > 100 {
 		return
 	}
@@ -75,7 +75,7 @@ func (r *cpusageRecorder) addRecord(cpusage float64) {
 	}
 }
 
-// getRecordNumOfCounterType 获取制定计数器的记录数
-func (r *cpusageRecorder) getRecordNumOfCounterType(ct CounterType) int {
+// GetRecordNumOfCounterType 获取制定计数器的记录数
+func (r *cpusageRecorder) GetRecordNumOfCounterType(ct CounterType) int {
 	return r.recordCounters[ct]
 }

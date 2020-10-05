@@ -124,9 +124,9 @@ func (p *massagePlan) StartLinux() error {
 		return fmt.Errorf("NewLinuxCPUsageCollector error:%s", err.Error())
 	}
 	const defaultTirenesLevel = CounterTypeFifty
-	const defaultInitialIntensity = 50
-	const defaultStepIntensity = 10
-	const defaultTiredRatio = 0.6
+	const defaultInitialIntensity = 80
+	const defaultStepIntensity = 20
+	const defaultTiredRatio = 0.8
 	const defaultCheckPeriodInSeconds = 10
 	return p.Start(linuxCPUsageCollector,
 		defaultTirenesLevel,
@@ -137,7 +137,7 @@ func (p *massagePlan) StartLinux() error {
 }
 
 func (p *massagePlan) IsHighLoad() bool {
-	tiredCount := p.cpusageRecorder.getRecordNumOfCounterType(p.tirenessLevel)
+	tiredCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.tirenessLevel)
 	const recordSum = 100
 	if tiredCount > int(recordSum*p.tiredRatio) {
 		return true
@@ -181,7 +181,7 @@ func (p *massagePlan) isTired() bool {
 }
 
 func (p *massagePlan) AddACPUsageRecord() {
-	p.cpusageRecorder.addRecord(p.cpusageCollector.GetCPUsage())
+	p.cpusageRecorder.AddRecord(p.cpusageCollector.GetCPUsage())
 	p.updateCurTime()
 	p.currentState.AddACPUsageRecord(p)
 }
@@ -286,9 +286,10 @@ func StartMassagePlan(cpusageCollector CPUsageCollector,
 // func main() {
 //     err := cpumassage.StartMassagePlanLinux()
 //     if err != nil {
-//         ...
+//         handleError() //  处理出错的情况，一般打印一下出错信息
+//         os.Exit(1) //  然后退出就好了
 //     }
-//     ...
+//     serve() //  进入服务程序正常处理流程
 // }
 func StartMassagePlanLinux() error {
 	return planInst.StartLinux()
@@ -298,9 +299,10 @@ func StartMassagePlanLinux() error {
 // 每次收到请求都调用一下，若返回false，继续做后续处理，否则直接返回
 // func handleARequest() {
 //     if cpumassage.NeedMassage() {
-//         return
+//         refuse() //  拒绝服务该请求，做一些简单的处理，例如设定回包的错误码，上报过载告警等
+//         return  //  然后直接返回
 //     }
-//     ...handle the request...
+//     process() //  正常处理该请求
 // }
 func NeedMassage() bool {
 	return planInst.NeedMassage()
