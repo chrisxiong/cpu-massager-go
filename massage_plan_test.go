@@ -31,15 +31,17 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	mockCollector.EXPECT().GetCPUsage().Return(51.0).AnyTimes()
 
 	mp := massagePlan{
-		isStarted:        false,
-		cpusageCollector: mockCollector,
+		isStarted: false,
+		opts: options{
+			cpusageCollector: mockCollector,
+			highLoadLevel:    CounterTypeFifty,
+			highLoadRatio:    0.6,
+			initialIntensity: 50,
+			stepIntensity:    10,
+		},
 		cpusageRecorder:  cpusageRecorder{},
 		currentState:     stateRelaxed{},
-		tirenessLevel:    CounterTypeFifty,
-		initialIntensity: 50,
-		stepIntensity:    10,
 		currentIntensity: 50,
-		tiredRatio:       0.6,
 	}
 	require.True(mp.isRelaxed())
 	require.False(mp.isTired())
@@ -51,7 +53,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.Equal(uint64(0), mp.doneTaskNum())
 	require.False(mp.NeedMassage())
 
-	// tiredRatio 0.59
+	// highLoadRatio 0.59
 	collectCounts := 59
 	for i := 0; i < collectCounts; i++ {
 		mp.AddACPUsageRecord()
@@ -66,7 +68,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.Equal(uint64(0), mp.todoTaskNum())
 	require.Equal(uint64(0), mp.doneTaskNum())
 
-	// tiredRatio 0.60
+	// highLoadRatio 0.60
 	mp.AddACPUsageRecord()
 	require.True(mp.isRelaxed())
 	require.False(mp.isTired())
@@ -78,7 +80,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.Equal(uint64(0), mp.todoTaskNum())
 	require.Equal(uint64(0), mp.doneTaskNum())
 
-	// tiredRatio 0.61
+	// highLoadRatio 0.61
 	mp.AddACPUsageRecord()
 	require.False(mp.isRelaxed())
 	require.True(mp.isTired())
@@ -101,8 +103,10 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 func TestDecreaseIntensity(t *testing.T) {
 	require := require.New(t)
 	mp := massagePlan{
-		initialIntensity: 50,
-		stepIntensity:    10,
+		opts: options{
+			initialIntensity: 50,
+			stepIntensity:    10,
+		},
 		currentIntensity: 50,
 	}
 	mp.currentCPUsageRecordTime = time.Now()
@@ -112,7 +116,7 @@ func TestDecreaseIntensity(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		mp.DecreaseIntensity()
-		require.Equalf(mp.initialIntensity-(uint(i)+1)*mp.stepIntensity,
+		require.Equalf(mp.opts.initialIntensity-(uint(i)+1)*mp.opts.stepIntensity,
 			mp.currentIntensity,
 			"currentIntensity:%d not equal in ite:%d", mp.currentIntensity, i)
 		require.Equal(mp.currentCPUsageRecordTime, mp.oldestTiredTime)
@@ -124,7 +128,7 @@ func TestDecreaseIntensity(t *testing.T) {
 		"currentIntensity:%d not equal", mp.currentIntensity)
 
 	mp.DecreaseIntensity()
-	require.Equalf(mp.initialIntensity,
+	require.Equalf(mp.opts.initialIntensity,
 		mp.currentIntensity,
 		"currentIntensity:%d not equal", mp.currentIntensity)
 	require.True(mp.oldestTiredTime.IsZero())
@@ -135,8 +139,10 @@ func TestDecreaseIntensity(t *testing.T) {
 func TestIncreaseIntensity(t *testing.T) {
 	require := require.New(t)
 	mp := massagePlan{
-		initialIntensity: 50,
-		stepIntensity:    10,
+		opts: options{
+			initialIntensity: 50,
+			stepIntensity:    10,
+		},
 		currentIntensity: 50,
 	}
 	mp.currentCPUsageRecordTime = time.Now()
@@ -147,7 +153,7 @@ func TestIncreaseIntensity(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		mp.IncreaseIntensity()
 		if i < 5 {
-			require.Equalf(mp.initialIntensity+(uint(i)+1)*mp.stepIntensity,
+			require.Equalf(mp.opts.initialIntensity+(uint(i)+1)*mp.opts.stepIntensity,
 				mp.currentIntensity,
 				"currentIntensity:%d not equal in ite:%d", mp.currentIntensity, i)
 			require.Equal(mp.currentCPUsageRecordTime, mp.oldestTiredTime)
@@ -166,7 +172,9 @@ func TestIsHighLoadDurationExceedCheckPeriod(t *testing.T) {
 	mp := massagePlan{
 		currentCPUsageRecordTime: curTime,
 		oldestTiredTime:          time.Unix(0, curTime.UnixNano()-int64(periodInSecond)*1e9-1),
-		checkPeriodInSeconds:     uint(periodInSecond),
+		opts: options{
+			checkPeriodInSeconds: uint(periodInSecond),
+		},
 	}
 	require.Truef(t, mp.IsHighLoadDurationExceedCheckPeriod(),
 		"curTime:%v, oldestTiredTime:%v, period:%v",
@@ -180,7 +188,9 @@ func TestIsLowLoadDurationExceedCheckPeriod(t *testing.T) {
 	mp := massagePlan{
 		currentCPUsageRecordTime: curTime,
 		latestTiredTime:          time.Unix(0, curTime.UnixNano()-int64(periodInSecond)*1e9-1),
-		checkPeriodInSeconds:     uint(periodInSecond),
+		opts: options{
+			checkPeriodInSeconds: uint(periodInSecond),
+		},
 	}
 	assert.Truef(t, mp.IsLowLoadDurationExceedCheckPeriod(),
 		"curTime:%v, oldestTiredTime:%v, period:%v",
@@ -191,8 +201,10 @@ func TestIsLowLoadDurationExceedCheckPeriod(t *testing.T) {
 func TestCanDoWorkInTired(t *testing.T) {
 	require := assert.New(t)
 	mp := massagePlan{
-		initialIntensity: 50,
-		stepIntensity:    10,
+		opts: options{
+			initialIntensity: 50,
+			stepIntensity:    10,
+		},
 		currentIntensity: 50,
 	}
 	mp.SetRelaxed()

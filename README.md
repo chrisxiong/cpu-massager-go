@@ -20,14 +20,14 @@ cpu-massager是一个过载保护器，称为"CPU按摩器"。
 
 ## 使用方法
 分两步：
-1. 调用StartMassagePlan系列API启动按摩计划；
+1. 调用StartMassagePlan这个API启动按摩计划；
 2. 调用NeedMassage这个API判断是否要拒绝服务。
 
 ### 启动按摩计划
-在程序启动的时候调用StartMassagePlan系列API。例如，在Linux环境下：
+在程序启动的时候调用StartMassagePlan。例如，在Linux环境下可以使用默认参数直接调用：
 ```go
 func main() {
-    err := cpumassager.StartMassagePlanLinux()
+    err := cpumassager.StartMassagePlan()
     if err != nil {
         handleError() //  处理出错的情况，一般打印一下出错信息
         os.Exit(1) //  然后退出就好了
@@ -35,7 +35,7 @@ func main() {
     serve() //  进入服务程序正常处理流程
 }
 ```
-StartMassagePlanLinux是Linux环境下用一系列默认参数启动的建议API，有需要调整相关参数的可以使用StartMassagePlan这个API来设定相关参数启动按摩计划，具体参数的说明，可以参照代码中对于massagePlan结构的注释。
+有需要调整相关参数的可以使用WithXXX系列API来设定相关参数启动按摩计划，具体参数的说明，可以参照代码中对于options结构的注释。
 
 ### 判断是否拒绝服务
 程序启动，接收到请求，开始处理之前，先调用NeedMassage这个API来决定是正常处理该请求还是拒绝为其服务返回过载的错误信息。
@@ -86,8 +86,8 @@ CPU使用率记录器示意图：
 #### 判断CPU高低负荷
 
 在具体判断CPU的"轻松"和"疲累"状态时，需要在每个CPU使用率采集时间点计算当下的CPU高低负荷，这个是根据启动按摩计划传入的两个参数和CPU记录器的计数器读数计算得到的：
-1. tirenessLevel，疲累等级，这个是和CPU使用率记录器的计数器相匹配的，按摩器在判断CPU状态的时候，会根据该疲累等级获取对应的计数器读数；
-2. tiredRatio，疲累比例，这个需要和疲累等级配合使用，如果CPU使用率记录器中对应疲累等级的计数器读数的占比高于疲累比例，则认为CPU处于 ***高负荷*** 中，否则处于 ***低负荷*** 中。
+1. highLoadLevel，高负荷等级，这个是和CPU使用率记录器的计数器相匹配的，按摩器在判断CPU状态的时候，会根据该等级获取对应的计数器读数；
+2. highLoadRatio，高负荷比例，这个需要和高负荷等级配合使用，如果CPU使用率记录器中对应高负荷等级的计数器读数的占比高于高负荷比例，则认为CPU处于 ***高负荷*** 中，否则处于 ***低负荷*** 中。
 
 #### 切换CPU状态
 

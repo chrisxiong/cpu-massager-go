@@ -1,21 +1,22 @@
 package main
 
 import (
-	"chrisxiong/cpumassager"
 	"flag"
 	"fmt"
 	"os"
 	"sync"
 	"time"
+
+	cpumassager "github.com/chrisxiong/cpu-massager-go"
 )
 
 func doBenchMark(totalTaskNum int, routineNum int, tired bool) {
 	var mode string
 	if !tired {
 		mode = "relax"
-		err := cpumassager.StartMassagePlanLinux()
+		err := cpumassager.StartMassagePlan()
 		if err != nil {
-			fmt.Printf("StartMassagePlanLinux error:%s", err.Error())
+			fmt.Printf("StartMassagePlan error:%s", err.Error())
 			os.Exit(1)
 		}
 		if cpumassager.NeedMassage() {
@@ -24,22 +25,12 @@ func doBenchMark(totalTaskNum int, routineNum int, tired bool) {
 		}
 	} else {
 		mode = "tired"
-		linuxCPUsageCollector, err := cpumassager.NewLinuxCPUsageCollector()
-		if err != nil {
-			fmt.Printf("NewLinuxCPUsageCollector error:%s\n", err.Error())
-			os.Exit(1)
-		}
-		const defaultTirenesLevel = cpumassager.CounterTypeZero
-		const defaultInitialIntensity = 100
-		const defaultStepIntensity = 50
-		const defaultTiredRatio = 0.01
+		const defaultHighLoadLevel = cpumassager.CounterTypeZero
+		const defaultHighLoadRatio = 0.01
 		const defaultCheckPeriodInSeconds = 1
-		err = cpumassager.StartMassagePlan(linuxCPUsageCollector,
-			defaultTirenesLevel,
-			defaultInitialIntensity,
-			defaultStepIntensity,
-			defaultTiredRatio,
-			defaultCheckPeriodInSeconds)
+		err := cpumassager.StartMassagePlan(cpumassager.WithHighLoadLevel(defaultHighLoadLevel),
+			cpumassager.WithHighLoadRatio(defaultHighLoadRatio),
+			cpumassager.WithCheckPeriodInseconds(defaultCheckPeriodInSeconds))
 		if err != nil {
 			fmt.Printf("StartMassagePlan error:%s\n", err.Error())
 			os.Exit(1)

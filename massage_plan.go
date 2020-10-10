@@ -23,35 +23,14 @@ const (
 
 // massagePlan 马杀鸡计划
 type massagePlan struct {
+	opts options
+
 	// isStarted 判断马杀鸡计划是否已经启动的标识字段，避免重复调用
-	isStarted bool
+	isStarted       bool
+	cpusageRecorder cpusageRecorder
+	currentState    massagePlanState
 
-	cpusageCollector CPUsageCollector
-	cpusageRecorder  cpusageRecorder
-	currentState     massagePlanState
-
-	// tirenessLevel 疲劳等级，和CPU使用率计数器对等，用来判断CPU的
-	// 负载是否过高，当CPU的使用率高于tirenewwLevel，则认为当前CPU
-	// 负载过高，例如，如果tirenessLevel为CounterTypeSeventy，那么
-	// CPU使用率>=70就认为CPU高负载了
-	// tirenessLevel需要和tiredRatio配合使用，单次的CPU使用率超过所
-	// 配置的tirenessLevel有可能是毛刺，cpusageRecorder会每隔一秒钟
-	// 记录一次CPU使用率，最多纪录100次，如果100次记录中超过所配置的
-	// tirenessLevel的数量>=100*tiredRatio，则认为CPU当前在疲劳状态
-	// 需要根据按摩力度算法按一定比例拒绝请求（做下马杀鸡）
-	tirenessLevel CounterType
-	tiredRatio    float64
-
-	// initialIntensity 和stepIntensity、currentIntensity、checkPeriodInSeconds
-	// 配合使用，intensity 表示按摩力度，是一个[0, 100]的数值，代表以多大比例拒
-	// 绝服务，initialIntensity是初始按摩力度，表示CPU刚进入疲累状态时候拒绝服务
-	// 的概率，每隔checkPeriodInSeconds检查周期，会根据情况调整currentIntensity
-	// 如果CPU在检查周期内依然疲累，则以stepIntensity步进调高按摩力度
-	// 如果CPU在检查周期内疲累降低，则以stepIntensity步进降低按摩力度
-	initialIntensity     uint
-	stepIntensity        uint
-	currentIntensity     uint
-	checkPeriodInSeconds uint
+	currentIntensity uint
 
 	// oldestTiredTime 检查周期内最早进入疲累状态的时间, 如果当前是疲累状态且
 	// oldestTiredTime到当前的时间差超过了checkPeriodInSeconds，则需要将当前的
@@ -74,40 +53,15 @@ type massagePlan struct {
 	doneTasks uint64
 }
 
-func (p *massagePlan) Start(cpusageCollector CPUsageCollector,
-	tirenessLevel CounterType,
-	initialIntensity uint,
-	stepIntensity uint,
-	tiredRatio float64,
-	checkPeriodInSeconds uint) error {
+func (p *massagePlan) Start(opts options) error {
+	if valid, err := opts.isValid(); !valid {
+		return fmt.Errorf("options invalid:%s", err.Error())
+	}
 	if p.isStarted == true {
 		return fmt.Errorf("massage plan has been started")
 	}
-
-	if cpusageCollector == nil {
-		return fmt.Errorf("cpusageCollector should not be nil")
-	}
-	p.cpusageCollector = cpusageCollector
-
-	p.tirenessLevel = tirenessLevel
-
-	if initialIntensity > fullIntensity {
-		return fmt.Errorf("initialIntensity should less than:%d, 50 is recommended(means 50%% tasks will be ignored)", fullIntensity)
-	}
-	p.initialIntensity = initialIntensity
-	p.currentIntensity = initialIntensity
-
-	if stepIntensity > fullIntensity {
-		return fmt.Errorf("stepIntensity should less than:%d, 10 is recommended", fullIntensity)
-	}
-	p.stepIntensity = stepIntensity
-
-	if tiredRatio > 1.0 || tiredRatio < 0.0 {
-		return fmt.Errorf("tiredRatio should in (0.0, 1.0), 0.6 isrecommended")
-	}
-	p.tiredRatio = tiredRatio
-
-	p.checkPeriodInSeconds = checkPeriodInSeconds
+	p.opts = opts
+	p.currentIntensity = opts.initialIntensity
 	p.isStarted = true
 	go func() {
 		for {
@@ -118,28 +72,10 @@ func (p *massagePlan) Start(cpusageCollector CPUsageCollector,
 	return nil
 }
 
-func (p *massagePlan) StartLinux() error {
-	linuxCPUsageCollector, err := NewLinuxCPUsageCollector()
-	if err != nil {
-		return fmt.Errorf("NewLinuxCPUsageCollector error:%s", err.Error())
-	}
-	const defaultTirenesLevel = CounterTypeFifty
-	const defaultInitialIntensity = 50
-	const defaultStepIntensity = 10
-	const defaultTiredRatio = 0.6
-	const defaultCheckPeriodInSeconds = 10
-	return p.Start(linuxCPUsageCollector,
-		defaultTirenesLevel,
-		defaultInitialIntensity,
-		defaultStepIntensity,
-		defaultTiredRatio,
-		defaultCheckPeriodInSeconds)
-}
-
 func (p *massagePlan) IsHighLoad() bool {
-	tiredCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.tirenessLevel)
+	tiredCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.highLoadLevel)
 	const recordSum = 100
-	if tiredCount > int(recordSum*p.tiredRatio) {
+	if tiredCount > int(recordSum*p.opts.highLoadRatio) {
 		return true
 	}
 	return false
@@ -147,17 +83,17 @@ func (p *massagePlan) IsHighLoad() bool {
 
 func (p *massagePlan) IsHighLoadDurationExceedCheckPeriod() bool {
 	period := p.currentCPUsageRecordTime.Sub(p.oldestTiredTime)
-	return period > time.Second*time.Duration(p.checkPeriodInSeconds)
+	return period > time.Second*time.Duration(p.opts.checkPeriodInSeconds)
 }
 
 func (p *massagePlan) IsLowLoadDurationExceedCheckPeriod() bool {
 	period := p.currentCPUsageRecordTime.Sub(p.latestTiredTime)
-	return period > time.Second*time.Duration(p.checkPeriodInSeconds)
+	return period > time.Second*time.Duration(p.opts.checkPeriodInSeconds)
 }
 
 func (p *massagePlan) SetRelaxed() {
 	p.currentState = stateRelaxed{}
-	p.currentIntensity = p.initialIntensity
+	p.currentIntensity = p.opts.initialIntensity
 	zeroTime := time.Time{}
 	p.oldestTiredTime = zeroTime
 	p.latestTiredTime = zeroTime
@@ -166,7 +102,7 @@ func (p *massagePlan) SetRelaxed() {
 
 func (p *massagePlan) SetTired() {
 	p.currentState = stateTired{}
-	p.currentIntensity = p.initialIntensity
+	p.currentIntensity = p.opts.initialIntensity
 	p.UpdateLatestTiredTime()
 	p.UpdateOldestTiredTime()
 	p.clearWorkspace()
@@ -181,7 +117,7 @@ func (p *massagePlan) isTired() bool {
 }
 
 func (p *massagePlan) AddACPUsageRecord() {
-	p.cpusageRecorder.AddRecord(p.cpusageCollector.GetCPUsage())
+	p.cpusageRecorder.AddRecord(p.opts.cpusageCollector.GetCPUsage())
 	p.updateCurTime()
 	p.currentState.AddACPUsageRecord(p)
 }
@@ -202,8 +138,8 @@ func (p *massagePlan) DecreaseIntensity() {
 	if p.currentIntensity == emptyIntensity {
 		p.SetRelaxed()
 	} else {
-		if p.currentIntensity > p.stepIntensity {
-			p.currentIntensity -= p.stepIntensity
+		if p.currentIntensity > p.opts.stepIntensity {
+			p.currentIntensity -= p.opts.stepIntensity
 		} else {
 			p.currentIntensity = emptyIntensity
 		}
@@ -214,8 +150,8 @@ func (p *massagePlan) DecreaseIntensity() {
 }
 
 func (p *massagePlan) IncreaseIntensity() {
-	if p.currentIntensity+p.stepIntensity < fullIntensity {
-		p.currentIntensity += p.stepIntensity
+	if p.currentIntensity+p.opts.stepIntensity < fullIntensity {
+		p.currentIntensity += p.opts.stepIntensity
 	} else {
 		p.currentIntensity = fullIntensity
 	}
@@ -265,34 +201,43 @@ func (p *massagePlan) NeedMassage() bool {
 	return true
 }
 
-// StartMassagePlan 启动马杀鸡计划，参数的说明参见massagePlan的注释
-// 使用方法和StartMassagePlanLinux一样
-func StartMassagePlan(cpusageCollector CPUsageCollector,
-	tirenessLevel CounterType,
-	initialIntensity uint,
-	stepIntensity uint,
-	tiredRatio float64,
-	checkPeriodInSeconds uint) error {
-	return planInst.Start(cpusageCollector,
-		tirenessLevel,
-		initialIntensity,
-		stepIntensity,
-		tiredRatio,
-		checkPeriodInSeconds)
-}
-
-// StartMassagePlanLinux 以默认参数启动linux环境的马杀鸡计划
-// 启动程序后立即调用，启动马杀鸡计划
+// StartMassagePlan 启动马杀鸡计划，在启动程序后立即调用
 // func main() {
-//     err := cpumassage.StartMassagePlanLinux()
+//     err := cpumassage.StartMassagePlan()
 //     if err != nil {
 //         handleError() //  处理出错的情况，一般打印一下出错信息
 //         os.Exit(1) //  然后退出就好了
 //     }
 //     serve() //  进入服务程序正常处理流程
 // }
-func StartMassagePlanLinux() error {
-	return planInst.StartLinux()
+func StartMassagePlan(opts ...Option) error {
+	const defaultHighLoadLevel = CounterTypeEighty // CPU使用率>=80%算是高负荷
+	const defaultHighLoadRatio = 0.6               // 高负荷占比超过60%
+	const defaultInitialIntensity = 50             // 初始化的按摩力度，50表示50%的概率拒绝服务，快速降温
+	const defaultStepIntensity = 10                // 以10为粒度上下调整按摩力度
+	const defaultCheckPeriodInSeconds = 10         // 每隔10秒钟审视当前按摩力度是否合适
+	options := &options{
+		highLoadLevel:        defaultHighLoadLevel,
+		highLoadRatio:        defaultHighLoadRatio,
+		initialIntensity:     defaultInitialIntensity,
+		stepIntensity:        defaultStepIntensity,
+		checkPeriodInSeconds: defaultCheckPeriodInSeconds,
+	}
+	for _, o := range opts {
+		o(options)
+	}
+	if options.cpusageCollector == nil {
+		// 没有指定CPU使用率收集器，那么采用Linux采集器
+		linuxCPUsageCollector, err := NewLinuxCPUsageCollector()
+		if err != nil {
+			return fmt.Errorf("NewLinuxCPUsageCollector error:%s", err.Error())
+		}
+		options.cpusageCollector = linuxCPUsageCollector
+	}
+	if valid, err := options.isValid(); !valid {
+		return fmt.Errorf("options invalid:%s", err.Error())
+	}
+	return planInst.Start(*options)
 }
 
 // NeedMassage 非是否需要做下马杀鸡放松一下
