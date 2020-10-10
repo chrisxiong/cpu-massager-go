@@ -136,6 +136,18 @@ func (p *massagePlan) StartLinux() error {
 		defaultCheckPeriodInSeconds)
 }
 
+func (p *massagePlan) StartWithOptions(opts options) error {
+	if valid, err := opts.isValid(); !valid {
+		return fmt.Errorf("options invalid:%s", err.Error())
+	}
+	return p.Start(opts.cpusageCollector,
+		opts.tirenessLevel,
+		opts.initialIntensity,
+		opts.stepIntensity,
+		opts.tiredRatio,
+		opts.checkPeriodInSeconds)
+}
+
 func (p *massagePlan) IsHighLoad() bool {
 	tiredCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.tirenessLevel)
 	const recordSum = 100
@@ -293,6 +305,36 @@ func StartMassagePlan(cpusageCollector CPUsageCollector,
 // }
 func StartMassagePlanLinux() error {
 	return planInst.StartLinux()
+}
+
+func StartMassagePlanWithOptions(opts ...Option) error {
+	const defaultTirenesLevel = CounterTypeEighty // CPU使用率>=80%算是高负荷
+	const defaultTiredRatio = 0.6                 // 高负荷占比超过60%
+	const defaultInitialIntensity = 50            // 初始化的按摩力度，50表示50%的概率拒绝服务，快速降温
+	const defaultStepIntensity = 10               // 以10为粒度上下调整按摩力度
+	const defaultCheckPeriodInSeconds = 10        // 每隔10秒钟审视当前按摩力度是否合适
+	options := &options{
+		tirenessLevel:        defaultTirenesLevel,
+		tiredRatio:           defaultTiredRatio,
+		initialIntensity:     defaultInitialIntensity,
+		stepIntensity:        defaultStepIntensity,
+		checkPeriodInSeconds: defaultCheckPeriodInSeconds,
+	}
+	for _, o := range opts {
+		o(options)
+	}
+	if options.cpusageCollector == nil {
+		// 没有指定CPU使用率收集器，那么采用Linux采集器
+		linuxCPUsageCollector, err := NewLinuxCPUsageCollector()
+		if err != nil {
+			return fmt.Errorf("NewLinuxCPUsageCollector error:%s", err.Error())
+		}
+		options.cpusageCollector = linuxCPUsageCollector
+	}
+	if valid, err := options.isValid(); !valid {
+		return fmt.Errorf("options invalid:%s", err.Error())
+	}
+	return planInst.StartWithOptions(*options)
 }
 
 // NeedMassage 非是否需要做下马杀鸡放松一下
