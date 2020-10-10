@@ -74,40 +74,20 @@ type massagePlan struct {
 	doneTasks uint64
 }
 
-func (p *massagePlan) Start(cpusageCollector CPUsageCollector,
-	tirenessLevel CounterType,
-	initialIntensity uint,
-	stepIntensity uint,
-	tiredRatio float64,
-	checkPeriodInSeconds uint) error {
+func (p *massagePlan) Start(opts options) error {
+	if valid, err := opts.isValid(); !valid {
+		return fmt.Errorf("options invalid:%s", err.Error())
+	}
 	if p.isStarted == true {
 		return fmt.Errorf("massage plan has been started")
 	}
-
-	if cpusageCollector == nil {
-		return fmt.Errorf("cpusageCollector should not be nil")
-	}
-	p.cpusageCollector = cpusageCollector
-
-	p.tirenessLevel = tirenessLevel
-
-	if initialIntensity > fullIntensity {
-		return fmt.Errorf("initialIntensity should less than:%d, 50 is recommended(means 50%% tasks will be ignored)", fullIntensity)
-	}
-	p.initialIntensity = initialIntensity
-	p.currentIntensity = initialIntensity
-
-	if stepIntensity > fullIntensity {
-		return fmt.Errorf("stepIntensity should less than:%d, 10 is recommended", fullIntensity)
-	}
-	p.stepIntensity = stepIntensity
-
-	if tiredRatio > 1.0 || tiredRatio < 0.0 {
-		return fmt.Errorf("tiredRatio should in (0.0, 1.0), 0.6 isrecommended")
-	}
-	p.tiredRatio = tiredRatio
-
-	p.checkPeriodInSeconds = checkPeriodInSeconds
+	p.cpusageCollector = opts.cpusageCollector
+	p.tirenessLevel = opts.tirenessLevel
+	p.tiredRatio = opts.tiredRatio
+	p.initialIntensity = opts.initialIntensity
+	p.currentIntensity = opts.initialIntensity
+	p.stepIntensity = opts.stepIntensity
+	p.checkPeriodInSeconds = opts.checkPeriodInSeconds
 	p.isStarted = true
 	go func() {
 		for {
@@ -116,36 +96,6 @@ func (p *massagePlan) Start(cpusageCollector CPUsageCollector,
 		}
 	}()
 	return nil
-}
-
-func (p *massagePlan) StartLinux() error {
-	linuxCPUsageCollector, err := NewLinuxCPUsageCollector()
-	if err != nil {
-		return fmt.Errorf("NewLinuxCPUsageCollector error:%s", err.Error())
-	}
-	const defaultTirenesLevel = CounterTypeFifty
-	const defaultInitialIntensity = 50
-	const defaultStepIntensity = 10
-	const defaultTiredRatio = 0.6
-	const defaultCheckPeriodInSeconds = 10
-	return p.Start(linuxCPUsageCollector,
-		defaultTirenesLevel,
-		defaultInitialIntensity,
-		defaultStepIntensity,
-		defaultTiredRatio,
-		defaultCheckPeriodInSeconds)
-}
-
-func (p *massagePlan) StartWithOptions(opts options) error {
-	if valid, err := opts.isValid(); !valid {
-		return fmt.Errorf("options invalid:%s", err.Error())
-	}
-	return p.Start(opts.cpusageCollector,
-		opts.tirenessLevel,
-		opts.initialIntensity,
-		opts.stepIntensity,
-		opts.tiredRatio,
-		opts.checkPeriodInSeconds)
 }
 
 func (p *massagePlan) IsHighLoad() bool {
@@ -277,37 +227,16 @@ func (p *massagePlan) NeedMassage() bool {
 	return true
 }
 
-// StartMassagePlan 启动马杀鸡计划，参数的说明参见massagePlan的注释
-// 使用方法和StartMassagePlanLinux一样
-func StartMassagePlan(cpusageCollector CPUsageCollector,
-	tirenessLevel CounterType,
-	initialIntensity uint,
-	stepIntensity uint,
-	tiredRatio float64,
-	checkPeriodInSeconds uint) error {
-	return planInst.Start(cpusageCollector,
-		tirenessLevel,
-		initialIntensity,
-		stepIntensity,
-		tiredRatio,
-		checkPeriodInSeconds)
-}
-
-// StartMassagePlanLinux 以默认参数启动linux环境的马杀鸡计划
-// 启动程序后立即调用，启动马杀鸡计划
+// StartMassagePlan 启动马杀鸡计划，在启动程序后立即调用
 // func main() {
-//     err := cpumassage.StartMassagePlanLinux()
+//     err := cpumassage.StartMassagePlan()
 //     if err != nil {
 //         handleError() //  处理出错的情况，一般打印一下出错信息
 //         os.Exit(1) //  然后退出就好了
 //     }
 //     serve() //  进入服务程序正常处理流程
 // }
-func StartMassagePlanLinux() error {
-	return planInst.StartLinux()
-}
-
-func StartMassagePlanWithOptions(opts ...Option) error {
+func StartMassagePlan(opts ...Option) error {
 	const defaultTirenesLevel = CounterTypeEighty // CPU使用率>=80%算是高负荷
 	const defaultTiredRatio = 0.6                 // 高负荷占比超过60%
 	const defaultInitialIntensity = 50            // 初始化的按摩力度，50表示50%的概率拒绝服务，快速降温
@@ -334,7 +263,7 @@ func StartMassagePlanWithOptions(opts ...Option) error {
 	if valid, err := options.isValid(); !valid {
 		return fmt.Errorf("options invalid:%s", err.Error())
 	}
-	return planInst.StartWithOptions(*options)
+	return planInst.Start(*options)
 }
 
 // NeedMassage 非是否需要做下马杀鸡放松一下

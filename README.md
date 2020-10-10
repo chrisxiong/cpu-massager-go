@@ -20,14 +20,14 @@ cpu-massager是一个过载保护器，称为"CPU按摩器"。
 
 ## 使用方法
 分两步：
-1. 调用StartMassagePlan系列API启动按摩计划；
+1. 调用StartMassagePlan这个API启动按摩计划；
 2. 调用NeedMassage这个API判断是否要拒绝服务。
 
 ### 启动按摩计划
-在程序启动的时候调用StartMassagePlan系列API。例如，在Linux环境下：
+在程序启动的时候调用StartMassagePlan。例如，在Linux环境下可以使用默认参数直接调用：
 ```go
 func main() {
-    err := cpumassager.StartMassagePlanLinux()
+    err := cpumassager.StartMassagePlan()
     if err != nil {
         handleError() //  处理出错的情况，一般打印一下出错信息
         os.Exit(1) //  然后退出就好了
@@ -35,7 +35,7 @@ func main() {
     serve() //  进入服务程序正常处理流程
 }
 ```
-StartMassagePlanLinux是Linux环境下用一系列默认参数启动的建议API，有需要调整相关参数的可以使用StartMassagePlan这个API来设定相关参数启动按摩计划，具体参数的说明，可以参照代码中对于massagePlan结构的注释。
+有需要调整相关参数的可以使用WithXXX系列API来设定相关参数启动按摩计划，具体参数的说明，可以参照代码中对于options结构的注释。
 
 ### 判断是否拒绝服务
 程序启动，接收到请求，开始处理之前，先调用NeedMassage这个API来决定是正常处理该请求还是拒绝为其服务返回过载的错误信息。

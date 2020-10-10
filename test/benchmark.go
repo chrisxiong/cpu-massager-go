@@ -14,9 +14,9 @@ func doBenchMark(totalTaskNum int, routineNum int, tired bool) {
 	var mode string
 	if !tired {
 		mode = "relax"
-		err := cpumassager.StartMassagePlanWithOptions()
+		err := cpumassager.StartMassagePlan()
 		if err != nil {
-			fmt.Printf("StartMassagePlanWithOptions error:%s", err.Error())
+			fmt.Printf("StartMassagePlan error:%s", err.Error())
 			os.Exit(1)
 		}
 		if cpumassager.NeedMassage() {
@@ -28,11 +28,11 @@ func doBenchMark(totalTaskNum int, routineNum int, tired bool) {
 		const defaultTirenesLevel = cpumassager.CounterTypeZero
 		const defaultTiredRatio = 0.01
 		const defaultCheckPeriodInSeconds = 1
-		err := cpumassager.StartMassagePlanWithOptions(cpumassager.WithTirenessLevel(defaultTirenesLevel),
+		err := cpumassager.StartMassagePlan(cpumassager.WithTirenessLevel(defaultTirenesLevel),
 			cpumassager.WithTiredRatio(defaultTiredRatio),
 			cpumassager.WithCheckPeriodInseconds(defaultCheckPeriodInSeconds))
 		if err != nil {
-			fmt.Printf("StartMassagePlanWithOptions error:%s\n", err.Error())
+			fmt.Printf("StartMassagePlan error:%s\n", err.Error())
 			os.Exit(1)
 		}
 		time.Sleep(2*time.Second + 100*time.Microsecond)

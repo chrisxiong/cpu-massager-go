@@ -28,6 +28,7 @@ type options struct {
 	checkPeriodInSeconds uint
 }
 
+// isValid 用来判断options中的各个选项参数是否合法
 func (o *options) isValid() (bool, error) {
 	if o.cpusageCollector == nil {
 		return false, fmt.Errorf("cpusageCollector should not be nil")
@@ -43,7 +44,7 @@ func (o *options) isValid() (bool, error) {
 		return false, fmt.Errorf("tiredRatio should in (0.0, 1.0), 0.6 isrecommended")
 	}
 	if o.checkPeriodInSeconds > 100 {
-		return false, fmt.Errorf("checkPeriodInseconds:%d, too long, <30 is recommended", o.checkPeriodInSeconds)
+		return false, fmt.Errorf("checkPeriodInSeconds:%d, too long, <30 is recommended", o.checkPeriodInSeconds)
 	}
 	return true, nil
 }
