@@ -23,35 +23,14 @@ const (
 
 // massagePlan 马杀鸡计划
 type massagePlan struct {
+	opts options
+
 	// isStarted 判断马杀鸡计划是否已经启动的标识字段，避免重复调用
-	isStarted bool
+	isStarted       bool
+	cpusageRecorder cpusageRecorder
+	currentState    massagePlanState
 
-	cpusageCollector CPUsageCollector
-	cpusageRecorder  cpusageRecorder
-	currentState     massagePlanState
-
-	// tirenessLevel 疲劳等级，和CPU使用率计数器对等，用来判断CPU的
-	// 负载是否过高，当CPU的使用率高于tirenewwLevel，则认为当前CPU
-	// 负载过高，例如，如果tirenessLevel为CounterTypeSeventy，那么
-	// CPU使用率>=70就认为CPU高负载了
-	// tirenessLevel需要和tiredRatio配合使用，单次的CPU使用率超过所
-	// 配置的tirenessLevel有可能是毛刺，cpusageRecorder会每隔一秒钟
-	// 记录一次CPU使用率，最多纪录100次，如果100次记录中超过所配置的
-	// tirenessLevel的数量>=100*tiredRatio，则认为CPU当前在疲劳状态
-	// 需要根据按摩力度算法按一定比例拒绝请求（做下马杀鸡）
-	tirenessLevel CounterType
-	tiredRatio    float64
-
-	// initialIntensity 和stepIntensity、currentIntensity、checkPeriodInSeconds
-	// 配合使用，intensity 表示按摩力度，是一个[0, 100]的数值，代表以多大比例拒
-	// 绝服务，initialIntensity是初始按摩力度，表示CPU刚进入疲累状态时候拒绝服务
-	// 的概率，每隔checkPeriodInSeconds检查周期，会根据情况调整currentIntensity
-	// 如果CPU在检查周期内依然疲累，则以stepIntensity步进调高按摩力度
-	// 如果CPU在检查周期内疲累降低，则以stepIntensity步进降低按摩力度
-	initialIntensity     uint
-	stepIntensity        uint
-	currentIntensity     uint
-	checkPeriodInSeconds uint
+	currentIntensity uint
 
 	// oldestTiredTime 检查周期内最早进入疲累状态的时间, 如果当前是疲累状态且
 	// oldestTiredTime到当前的时间差超过了checkPeriodInSeconds，则需要将当前的
@@ -81,13 +60,8 @@ func (p *massagePlan) Start(opts options) error {
 	if p.isStarted == true {
 		return fmt.Errorf("massage plan has been started")
 	}
-	p.cpusageCollector = opts.cpusageCollector
-	p.tirenessLevel = opts.tirenessLevel
-	p.tiredRatio = opts.tiredRatio
-	p.initialIntensity = opts.initialIntensity
+	p.opts = opts
 	p.currentIntensity = opts.initialIntensity
-	p.stepIntensity = opts.stepIntensity
-	p.checkPeriodInSeconds = opts.checkPeriodInSeconds
 	p.isStarted = true
 	go func() {
 		for {
@@ -99,9 +73,9 @@ func (p *massagePlan) Start(opts options) error {
 }
 
 func (p *massagePlan) IsHighLoad() bool {
-	tiredCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.tirenessLevel)
+	tiredCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.tirenessLevel)
 	const recordSum = 100
-	if tiredCount > int(recordSum*p.tiredRatio) {
+	if tiredCount > int(recordSum*p.opts.tiredRatio) {
 		return true
 	}
 	return false
@@ -109,17 +83,17 @@ func (p *massagePlan) IsHighLoad() bool {
 
 func (p *massagePlan) IsHighLoadDurationExceedCheckPeriod() bool {
 	period := p.currentCPUsageRecordTime.Sub(p.oldestTiredTime)
-	return period > time.Second*time.Duration(p.checkPeriodInSeconds)
+	return period > time.Second*time.Duration(p.opts.checkPeriodInSeconds)
 }
 
 func (p *massagePlan) IsLowLoadDurationExceedCheckPeriod() bool {
 	period := p.currentCPUsageRecordTime.Sub(p.latestTiredTime)
-	return period > time.Second*time.Duration(p.checkPeriodInSeconds)
+	return period > time.Second*time.Duration(p.opts.checkPeriodInSeconds)
 }
 
 func (p *massagePlan) SetRelaxed() {
 	p.currentState = stateRelaxed{}
-	p.currentIntensity = p.initialIntensity
+	p.currentIntensity = p.opts.initialIntensity
 	zeroTime := time.Time{}
 	p.oldestTiredTime = zeroTime
 	p.latestTiredTime = zeroTime
@@ -128,7 +102,7 @@ func (p *massagePlan) SetRelaxed() {
 
 func (p *massagePlan) SetTired() {
 	p.currentState = stateTired{}
-	p.currentIntensity = p.initialIntensity
+	p.currentIntensity = p.opts.initialIntensity
 	p.UpdateLatestTiredTime()
 	p.UpdateOldestTiredTime()
 	p.clearWorkspace()
@@ -143,7 +117,7 @@ func (p *massagePlan) isTired() bool {
 }
 
 func (p *massagePlan) AddACPUsageRecord() {
-	p.cpusageRecorder.AddRecord(p.cpusageCollector.GetCPUsage())
+	p.cpusageRecorder.AddRecord(p.opts.cpusageCollector.GetCPUsage())
 	p.updateCurTime()
 	p.currentState.AddACPUsageRecord(p)
 }
@@ -164,8 +138,8 @@ func (p *massagePlan) DecreaseIntensity() {
 	if p.currentIntensity == emptyIntensity {
 		p.SetRelaxed()
 	} else {
-		if p.currentIntensity > p.stepIntensity {
-			p.currentIntensity -= p.stepIntensity
+		if p.currentIntensity > p.opts.stepIntensity {
+			p.currentIntensity -= p.opts.stepIntensity
 		} else {
 			p.currentIntensity = emptyIntensity
 		}
@@ -176,8 +150,8 @@ func (p *massagePlan) DecreaseIntensity() {
 }
 
 func (p *massagePlan) IncreaseIntensity() {
-	if p.currentIntensity+p.stepIntensity < fullIntensity {
-		p.currentIntensity += p.stepIntensity
+	if p.currentIntensity+p.opts.stepIntensity < fullIntensity {
+		p.currentIntensity += p.opts.stepIntensity
 	} else {
 		p.currentIntensity = fullIntensity
 	}
