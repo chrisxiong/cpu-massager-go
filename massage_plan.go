@@ -73,9 +73,9 @@ func (p *massagePlan) Start(opts options) error {
 }
 
 func (p *massagePlan) IsHighLoad() bool {
-	tiredCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.tirenessLevel)
+	tiredCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.highLoadLevel)
 	const recordSum = 100
-	if tiredCount > int(recordSum*p.opts.tiredRatio) {
+	if tiredCount > int(recordSum*p.opts.highLoadRatio) {
 		return true
 	}
 	return false
@@ -211,14 +211,14 @@ func (p *massagePlan) NeedMassage() bool {
 //     serve() //  进入服务程序正常处理流程
 // }
 func StartMassagePlan(opts ...Option) error {
-	const defaultTirenesLevel = CounterTypeEighty // CPU使用率>=80%算是高负荷
-	const defaultTiredRatio = 0.6                 // 高负荷占比超过60%
-	const defaultInitialIntensity = 50            // 初始化的按摩力度，50表示50%的概率拒绝服务，快速降温
-	const defaultStepIntensity = 10               // 以10为粒度上下调整按摩力度
-	const defaultCheckPeriodInSeconds = 10        // 每隔10秒钟审视当前按摩力度是否合适
+	const defaultHighLoadLevel = CounterTypeEighty // CPU使用率>=80%算是高负荷
+	const defaultHighLoadRatio = 0.6               // 高负荷占比超过60%
+	const defaultInitialIntensity = 50             // 初始化的按摩力度，50表示50%的概率拒绝服务，快速降温
+	const defaultStepIntensity = 10                // 以10为粒度上下调整按摩力度
+	const defaultCheckPeriodInSeconds = 10         // 每隔10秒钟审视当前按摩力度是否合适
 	options := &options{
-		tirenessLevel:        defaultTirenesLevel,
-		tiredRatio:           defaultTiredRatio,
+		highLoadLevel:        defaultHighLoadLevel,
+		highLoadRatio:        defaultHighLoadRatio,
 		initialIntensity:     defaultInitialIntensity,
 		stepIntensity:        defaultStepIntensity,
 		checkPeriodInSeconds: defaultCheckPeriodInSeconds,

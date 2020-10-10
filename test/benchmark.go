@@ -25,11 +25,11 @@ func doBenchMark(totalTaskNum int, routineNum int, tired bool) {
 		}
 	} else {
 		mode = "tired"
-		const defaultTirenesLevel = cpumassager.CounterTypeZero
-		const defaultTiredRatio = 0.01
+		const defaultHighLoadLevel = cpumassager.CounterTypeZero
+		const defaultHighLoadRatio = 0.01
 		const defaultCheckPeriodInSeconds = 1
-		err := cpumassager.StartMassagePlan(cpumassager.WithTirenessLevel(defaultTirenesLevel),
-			cpumassager.WithTiredRatio(defaultTiredRatio),
+		err := cpumassager.StartMassagePlan(cpumassager.WithHighLoadLevel(defaultHighLoadLevel),
+			cpumassager.WithHighLoadRatio(defaultHighLoadRatio),
 			cpumassager.WithCheckPeriodInseconds(defaultCheckPeriodInSeconds))
 		if err != nil {
 			fmt.Printf("StartMassagePlan error:%s\n", err.Error())

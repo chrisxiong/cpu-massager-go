@@ -34,8 +34,8 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 		isStarted: false,
 		opts: options{
 			cpusageCollector: mockCollector,
-			tirenessLevel:    CounterTypeFifty,
-			tiredRatio:       0.6,
+			highLoadLevel:    CounterTypeFifty,
+			highLoadRatio:    0.6,
 			initialIntensity: 50,
 			stepIntensity:    10,
 		},
@@ -53,7 +53,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.Equal(uint64(0), mp.doneTaskNum())
 	require.False(mp.NeedMassage())
 
-	// tiredRatio 0.59
+	// highLoadRatio 0.59
 	collectCounts := 59
 	for i := 0; i < collectCounts; i++ {
 		mp.AddACPUsageRecord()
@@ -68,7 +68,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.Equal(uint64(0), mp.todoTaskNum())
 	require.Equal(uint64(0), mp.doneTaskNum())
 
-	// tiredRatio 0.60
+	// highLoadRatio 0.60
 	mp.AddACPUsageRecord()
 	require.True(mp.isRelaxed())
 	require.False(mp.isTired())
@@ -80,7 +80,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.Equal(uint64(0), mp.todoTaskNum())
 	require.Equal(uint64(0), mp.doneTaskNum())
 
-	// tiredRatio 0.61
+	// highLoadRatio 0.61
 	mp.AddACPUsageRecord()
 	require.False(mp.isRelaxed())
 	require.True(mp.isTired())
