@@ -227,12 +227,7 @@ func StartMassagePlan(opts ...Option) error {
 		o(options)
 	}
 	if options.cpusageCollector == nil {
-		// 没有指定CPU使用率收集器，那么采用Linux采集器
-		linuxCPUsageCollector, err := NewLinuxCPUsageCollector()
-		if err != nil {
-			return fmt.Errorf("NewLinuxCPUsageCollector error:%s", err.Error())
-		}
-		options.cpusageCollector = linuxCPUsageCollector
+		return fmt.Errorf("Use WithCPUSageCollector to specify a correct collector")
 	}
 	if valid, err := options.isValid(); !valid {
 		return fmt.Errorf("options invalid:%s", err.Error())
