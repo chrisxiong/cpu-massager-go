@@ -8,6 +8,7 @@ import (
 
 // CPUsageCollector 收集CPU使用率的接口
 type CPUsageCollector interface {
+	// GetCPUsage 获取CPU使用率
 	GetCPUsage() float64
 }
 
@@ -47,16 +48,15 @@ type linuxCPUsageCollector struct {
 	curCPUData  *linuxCPUData
 }
 
-// GetCPUsage 获取CPU使用率，如果获取失败，返回负数
 func (c *linuxCPUsageCollector) GetCPUsage() float64 {
 	curLinuxCPUData, err := getCurLinuxCPUData()
 	if err != nil {
-		return -1
+		return 0.0
 	}
 	c.curCPUData = curLinuxCPUData
 	if c.lastCPUData == nil {
 		c.lastCPUData = c.curCPUData
-		return 0
+		return 0.0
 	}
 
 	userPeriod := (c.curCPUData.user - c.curCPUData.guest) -
@@ -72,13 +72,10 @@ func (c *linuxCPUsageCollector) GetCPUsage() float64 {
 	totalPeriod := c.curCPUData.total - c.lastCPUData.total
 	c.lastCPUData = c.curCPUData
 
-	if totalPeriod < 0 {
-		return -2
+	if usedPeriod > 0 && totalPeriod > 0 {
+		return float64(usedPeriod) / float64(totalPeriod) * 100.0
 	}
-	if totalPeriod == 0 {
-		return 0
-	}
-	return float64(usedPeriod * 100.0 / totalPeriod)
+	return 0.0
 }
 
 // NewLinuxCPUsageCollector 新建一个linux的CPU使用率收集器
