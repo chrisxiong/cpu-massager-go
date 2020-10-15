@@ -19,8 +19,8 @@ func init() {
 const (
 	emptyIntensity          = 0
 	fullIntensity           = 100
-	maxStepIntensity        = 30
-	maxCheckPeriodInSeconds = 50
+	maxStepIntensity        = 10
+	maxCheckPeriodInSeconds = 10
 	recordSum               = 100
 )
 
@@ -35,17 +35,9 @@ type massagePlan struct {
 
 	currentIntensity uint
 
-	// oldestTiredTime 检查周期内最早进入疲累状态的时间, 如果当前是疲累状态且
-	// oldestTiredTime到当前的时间差超过了checkPeriodInSeconds，则需要将当前的
-	// 按摩力度调高
-	oldestTiredTime time.Time
-	// latestTiredTime 检查周期内最近进入疲累状态的时间，如果当前是疲累状态且
-	// latestTiredTime到当前的时间差超过了checkPeriodInSeconds，则需要将当前的
-	// 按摩力度调低
-	latestTiredTime time.Time
-	// currentCPUsageRecordTime 当前的CPU使用率记录登记时间，初次进入疲累状态或
-	// 调整按摩力度的时候，会需要用该时间重置oldestTiredTime和latestTiredTime
 	currentCPUsageRecordTime time.Time
+	changeIntensityTime      time.Time
+	lastHighLoadCount        int
 
 	// todoTasks 待处理任务，和doneTasks配合使用在疲累状态时候，依据按摩力度
 	// 算法决定是否要做马杀鸡来拒绝服务，每次接受到请求都需要调用NeedMassage
@@ -83,21 +75,15 @@ func (p *massagePlan) IsHighLoad() bool {
 	return false
 }
 
-func (p *massagePlan) IsHighLoadDurationExceedCheckPeriod() bool {
-	period := p.currentCPUsageRecordTime.Sub(p.oldestTiredTime)
-	return period > time.Second*time.Duration(p.opts.checkPeriodInSeconds)
+func (p *massagePlan) IsHighLoadCountIncreased() bool {
+	curHighLoadCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.highLoadLevel)
+	increased := curHighLoadCount > p.lastHighLoadCount || curHighLoadCount == recordSum
+	p.lastHighLoadCount = curHighLoadCount
+	return increased
 }
 
-func (p *massagePlan) IsSafeLoad() bool {
-	safeLoadCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.highLoadLevel)
-	if safeLoadCount < int(recordSum*(1.0-p.opts.loadStatusJudgeRatio)) {
-		return true
-	}
-	return false
-}
-
-func (p *massagePlan) IsSafeLoadDurationExceedCheckPeriod() bool {
-	period := p.currentCPUsageRecordTime.Sub(p.latestTiredTime)
+func (p *massagePlan) IsChangeDurationExceedCheckPeriod() bool {
+	period := p.currentCPUsageRecordTime.Sub(p.changeIntensityTime)
 	return period > time.Second*time.Duration(p.opts.checkPeriodInSeconds)
 }
 
@@ -105,16 +91,15 @@ func (p *massagePlan) SetRelaxed() {
 	p.currentState = stateRelaxed{}
 	p.currentIntensity = p.opts.initialIntensity
 	zeroTime := time.Time{}
-	p.oldestTiredTime = zeroTime
-	p.latestTiredTime = zeroTime
+	p.changeIntensityTime = zeroTime
 	p.clearWorkspace()
 }
 
 func (p *massagePlan) SetTired() {
 	p.currentState = stateTired{}
 	p.currentIntensity = p.opts.initialIntensity
-	p.UpdateLatestTiredTime()
-	p.UpdateOldestTiredTime()
+	p.lastHighLoadCount = p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.highLoadLevel)
+	p.UpdateChangeIntensityTime()
 	p.clearWorkspace()
 }
 
@@ -132,12 +117,8 @@ func (p *massagePlan) AddACPUsageRecord() {
 	p.currentState.AddACPUsageRecord(p)
 }
 
-func (p *massagePlan) UpdateOldestTiredTime() {
-	p.oldestTiredTime = p.currentCPUsageRecordTime
-}
-
-func (p *massagePlan) UpdateLatestTiredTime() {
-	p.latestTiredTime = p.currentCPUsageRecordTime
+func (p *massagePlan) UpdateChangeIntensityTime() {
+	p.changeIntensityTime = p.currentCPUsageRecordTime
 }
 
 func (p *massagePlan) updateCurTime() {
@@ -153,8 +134,7 @@ func (p *massagePlan) DecreaseIntensity() {
 		} else {
 			p.currentIntensity = emptyIntensity
 		}
-		p.UpdateOldestTiredTime()
-		p.UpdateLatestTiredTime()
+		p.UpdateChangeIntensityTime()
 		p.clearWorkspace()
 	}
 }
@@ -165,8 +145,7 @@ func (p *massagePlan) IncreaseIntensity() {
 	} else {
 		p.currentIntensity = fullIntensity
 	}
-	p.UpdateOldestTiredTime()
-	p.UpdateLatestTiredTime()
+	p.UpdateChangeIntensityTime()
 	p.clearWorkspace()
 }
 
@@ -222,10 +201,10 @@ func (p *massagePlan) NeedMassage() bool {
 // }
 func StartMassagePlan(opts ...Option) error {
 	const defaultHighLoadLevel = CounterTypeEighty // CPU使用率>=80%算是高负荷
-	const defaultLoadStatusJudgeRatio = 0.6        // 高负荷占比超过60%
+	const defaultLoadStatusJudgeRatio = 0.2        // 高负荷占比超过20%
 	const defaultInitialIntensity = 50             // 初始化的按摩力度，50表示50%的概率拒绝服务，快速降温
-	const defaultStepIntensity = 5                 // 以5为粒度上下调整按摩力度
-	const defaultCheckPeriodInSeconds = 10         // 每隔10秒钟审视当前按摩力度是否合适
+	const defaultStepIntensity = 1                 // 以1为粒度上下调整按摩力度
+	const defaultCheckPeriodInSeconds = 3          // 每隔3秒钟审视当前按摩力度是否合适
 	options := &options{
 		highLoadLevel:        defaultHighLoadLevel,
 		loadStatusJudgeRatio: defaultLoadStatusJudgeRatio,

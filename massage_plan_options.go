@@ -34,18 +34,18 @@ func (o *options) isValid() (bool, error) {
 	if o.cpusageCollector == nil {
 		return false, fmt.Errorf("cpusageCollector should not be nil")
 	}
-	if o.loadStatusJudgeRatio > 0.9 || o.loadStatusJudgeRatio < 0.55 {
-		return false, fmt.Errorf("loadStatusJudgeRatio should in [0.55, 0.9], 0.6 is recommended(means cpu can enter tired in 60 seconds)")
+	if o.loadStatusJudgeRatio > 1.0 || o.loadStatusJudgeRatio < 0.1 {
+		return false, fmt.Errorf("loadStatusJudgeRatio should in [0.1, 1.0], 0.2 is recommended(means cpu can enter tired in 20 seconds)")
 	}
 	if o.initialIntensity > fullIntensity {
-		return false, fmt.Errorf("initialIntensity should less than:%d, 50 is recommended(means 50%% tasks will be ignored)",
+		return false, fmt.Errorf("initialIntensity should not greater than:%d, 50 is recommended(means 50%% tasks will be ignored)",
 			fullIntensity)
 	}
 	if o.stepIntensity > maxStepIntensity {
-		return false, fmt.Errorf("stepIntensity should less than:%d, 5 is recommended", maxStepIntensity)
+		return false, fmt.Errorf("stepIntensity should not greater than:%d, 1 is recommended", maxStepIntensity)
 	}
 	if o.checkPeriodInSeconds > maxCheckPeriodInSeconds {
-		return false, fmt.Errorf("checkPeriodInSeconds should less than:%d, 10 is recommended", maxCheckPeriodInSeconds)
+		return false, fmt.Errorf("checkPeriodInSeconds should not greater than:%d, 3 is recommended", maxCheckPeriodInSeconds)
 	}
 	return true, nil
 }

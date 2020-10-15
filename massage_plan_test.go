@@ -46,8 +46,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.True(mp.isRelaxed())
 	require.False(mp.isTired())
 	require.False(mp.IsHighLoad())
-	require.True(mp.oldestTiredTime.IsZero())
-	require.True(mp.latestTiredTime.IsZero())
+	require.True(mp.changeIntensityTime.IsZero())
 	require.True(mp.currentCPUsageRecordTime.IsZero())
 	require.Equal(uint64(0), mp.todoTaskNum())
 	require.Equal(uint64(0), mp.doneTaskNum())
@@ -62,8 +61,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.True(mp.isRelaxed())
 	require.False(mp.isTired())
 	require.False(mp.IsHighLoad())
-	require.True(mp.oldestTiredTime.IsZero())
-	require.True(mp.latestTiredTime.IsZero())
+	require.True(mp.changeIntensityTime.IsZero())
 	require.False(mp.currentCPUsageRecordTime.IsZero())
 	require.Equal(uint64(0), mp.todoTaskNum())
 	require.Equal(uint64(0), mp.doneTaskNum())
@@ -73,8 +71,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.True(mp.isRelaxed())
 	require.False(mp.isTired())
 	require.False(mp.IsHighLoad())
-	require.True(mp.oldestTiredTime.IsZero())
-	require.True(mp.latestTiredTime.IsZero())
+	require.True(mp.changeIntensityTime.IsZero())
 	require.False(mp.currentCPUsageRecordTime.IsZero())
 	require.False(mp.NeedMassage())
 	require.Equal(uint64(0), mp.todoTaskNum())
@@ -85,8 +82,7 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	require.False(mp.isRelaxed())
 	require.True(mp.isTired())
 	require.True(mp.IsHighLoad())
-	require.False(mp.oldestTiredTime.IsZero())
-	require.False(mp.latestTiredTime.IsZero())
+	require.False(mp.changeIntensityTime.IsZero())
 	require.False(mp.currentCPUsageRecordTime.IsZero())
 	require.Equal(uint64(0), mp.todoTaskNum())
 	require.Equal(uint64(0), mp.doneTaskNum())
@@ -110,8 +106,8 @@ func TestDecreaseIntensity(t *testing.T) {
 		currentIntensity: 50,
 	}
 	mp.currentCPUsageRecordTime = time.Now()
-	require.True(mp.oldestTiredTime.IsZero())
-	require.True(mp.latestTiredTime.IsZero())
+	require.True(mp.changeIntensityTime.IsZero())
+	require.True(mp.changeIntensityTime.IsZero())
 	require.False(mp.currentCPUsageRecordTime.IsZero())
 
 	for i := 0; i < 5; i++ {
@@ -119,8 +115,7 @@ func TestDecreaseIntensity(t *testing.T) {
 		require.Equalf(mp.opts.initialIntensity-(uint(i)+1)*mp.opts.stepIntensity,
 			mp.currentIntensity,
 			"currentIntensity:%d not equal in ite:%d", mp.currentIntensity, i)
-		require.Equal(mp.currentCPUsageRecordTime, mp.oldestTiredTime)
-		require.Equal(mp.currentCPUsageRecordTime, mp.latestTiredTime)
+		require.Equal(mp.currentCPUsageRecordTime, mp.changeIntensityTime)
 		require.False(mp.currentCPUsageRecordTime.IsZero())
 	}
 	require.Equalf(uint(emptyIntensity),
@@ -131,8 +126,7 @@ func TestDecreaseIntensity(t *testing.T) {
 	require.Equalf(mp.opts.initialIntensity,
 		mp.currentIntensity,
 		"currentIntensity:%d not equal", mp.currentIntensity)
-	require.True(mp.oldestTiredTime.IsZero())
-	require.True(mp.latestTiredTime.IsZero())
+	require.True(mp.changeIntensityTime.IsZero())
 	require.False(mp.currentCPUsageRecordTime.IsZero())
 }
 
@@ -146,8 +140,7 @@ func TestIncreaseIntensity(t *testing.T) {
 		currentIntensity: 50,
 	}
 	mp.currentCPUsageRecordTime = time.Now()
-	require.True(mp.oldestTiredTime.IsZero())
-	require.True(mp.latestTiredTime.IsZero())
+	require.True(mp.changeIntensityTime.IsZero())
 	require.False(mp.currentCPUsageRecordTime.IsZero())
 
 	for i := 0; i < 5; i++ {
@@ -156,8 +149,7 @@ func TestIncreaseIntensity(t *testing.T) {
 			require.Equalf(mp.opts.initialIntensity+(uint(i)+1)*mp.opts.stepIntensity,
 				mp.currentIntensity,
 				"currentIntensity:%d not equal in ite:%d", mp.currentIntensity, i)
-			require.Equal(mp.currentCPUsageRecordTime, mp.oldestTiredTime)
-			require.Equal(mp.currentCPUsageRecordTime, mp.latestTiredTime)
+			require.Equal(mp.currentCPUsageRecordTime, mp.changeIntensityTime)
 			require.False(mp.currentCPUsageRecordTime.IsZero())
 		}
 	}
@@ -166,36 +158,20 @@ func TestIncreaseIntensity(t *testing.T) {
 		"currentIntensity:%d not equal", mp.currentIntensity)
 }
 
-func TestIsHighLoadDurationExceedCheckPeriod(t *testing.T) {
+func TestIsChangeDurationExceedCheckPeriod(t *testing.T) {
 	periodInSecond := 10
 	curTime := time.Now()
 	mp := massagePlan{
 		currentCPUsageRecordTime: curTime,
-		oldestTiredTime:          time.Unix(0, curTime.UnixNano()-int64(periodInSecond)*1e9-1),
+		changeIntensityTime:      time.Unix(0, curTime.UnixNano()-int64(periodInSecond)*1e9-1),
 		opts: options{
 			checkPeriodInSeconds: uint(periodInSecond),
 		},
 	}
-	require.Truef(t, mp.IsHighLoadDurationExceedCheckPeriod(),
-		"curTime:%v, oldestTiredTime:%v, period:%v",
-		mp.currentCPUsageRecordTime, mp.oldestTiredTime,
-		mp.currentCPUsageRecordTime.Sub(mp.oldestTiredTime))
-}
-
-func TestIsLowLoadDurationExceedCheckPeriod(t *testing.T) {
-	periodInSecond := 10
-	curTime := time.Now()
-	mp := massagePlan{
-		currentCPUsageRecordTime: curTime,
-		latestTiredTime:          time.Unix(0, curTime.UnixNano()-int64(periodInSecond)*1e9-1),
-		opts: options{
-			checkPeriodInSeconds: uint(periodInSecond),
-		},
-	}
-	assert.Truef(t, mp.IsSafeLoadDurationExceedCheckPeriod(),
-		"curTime:%v, oldestTiredTime:%v, period:%v",
-		mp.currentCPUsageRecordTime, mp.oldestTiredTime,
-		mp.currentCPUsageRecordTime.Sub(mp.oldestTiredTime))
+	assert.Truef(t, mp.IsChangeDurationExceedCheckPeriod(),
+		"curTime:%v, changeIntensityTime:%v, period:%v",
+		mp.currentCPUsageRecordTime, mp.changeIntensityTime,
+		mp.currentCPUsageRecordTime.Sub(mp.changeIntensityTime))
 }
 
 func TestCanDoWorkInTired(t *testing.T) {

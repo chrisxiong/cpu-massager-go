@@ -19,16 +19,13 @@ func (s stateRelaxed) AddACPUsageRecord(p *massagePlan) {
 type stateTired struct{}
 
 func (s stateTired) AddACPUsageRecord(p *massagePlan) {
-	if p.IsHighLoad() {
-		p.UpdateLatestTiredTime()
-		if p.IsHighLoadDurationExceedCheckPeriod() {
-			p.IncreaseIntensity()
-		}
+	if !p.IsChangeDurationExceedCheckPeriod() {
+		return
 	}
 
-	if p.IsSafeLoad() {
-		if p.IsSafeLoadDurationExceedCheckPeriod() {
-			p.DecreaseIntensity()
-		}
+	if p.IsHighLoadCountIncreased() {
+		p.IncreaseIntensity()
+	} else {
+		p.DecreaseIntensity()
 	}
 }
