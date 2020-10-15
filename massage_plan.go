@@ -17,8 +17,11 @@ func init() {
 }
 
 const (
-	emptyIntensity = 0
-	fullIntensity  = 100
+	emptyIntensity          = 0
+	fullIntensity           = 100
+	maxStepIntensity        = 30
+	maxCheckPeriodInSeconds = 50
+	recordSum               = 100
 )
 
 // massagePlan 马杀鸡计划
@@ -73,9 +76,8 @@ func (p *massagePlan) Start(opts options) error {
 }
 
 func (p *massagePlan) IsHighLoad() bool {
-	tiredCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.highLoadLevel)
-	const recordSum = 100
-	if tiredCount > int(recordSum*p.opts.highLoadRatio) {
+	highLoadCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.highLoadLevel)
+	if highLoadCount > int(recordSum*p.opts.loadStatusJudgeRatio) {
 		return true
 	}
 	return false
@@ -86,7 +88,15 @@ func (p *massagePlan) IsHighLoadDurationExceedCheckPeriod() bool {
 	return period > time.Second*time.Duration(p.opts.checkPeriodInSeconds)
 }
 
-func (p *massagePlan) IsLowLoadDurationExceedCheckPeriod() bool {
+func (p *massagePlan) IsSafeLoad() bool {
+	safeLoadCount := p.cpusageRecorder.GetRecordNumOfCounterType(p.opts.highLoadLevel)
+	if safeLoadCount < int(recordSum*(1.0-p.opts.loadStatusJudgeRatio)) {
+		return true
+	}
+	return false
+}
+
+func (p *massagePlan) IsSafeLoadDurationExceedCheckPeriod() bool {
 	period := p.currentCPUsageRecordTime.Sub(p.latestTiredTime)
 	return period > time.Second*time.Duration(p.opts.checkPeriodInSeconds)
 }
@@ -212,13 +222,13 @@ func (p *massagePlan) NeedMassage() bool {
 // }
 func StartMassagePlan(opts ...Option) error {
 	const defaultHighLoadLevel = CounterTypeEighty // CPU使用率>=80%算是高负荷
-	const defaultHighLoadRatio = 0.6               // 高负荷占比超过60%
+	const defaultLoadStatusJudgeRatio = 0.6        // 高负荷占比超过60%
 	const defaultInitialIntensity = 50             // 初始化的按摩力度，50表示50%的概率拒绝服务，快速降温
-	const defaultStepIntensity = 10                // 以10为粒度上下调整按摩力度
+	const defaultStepIntensity = 5                 // 以5为粒度上下调整按摩力度
 	const defaultCheckPeriodInSeconds = 10         // 每隔10秒钟审视当前按摩力度是否合适
 	options := &options{
 		highLoadLevel:        defaultHighLoadLevel,
-		highLoadRatio:        defaultHighLoadRatio,
+		loadStatusJudgeRatio: defaultLoadStatusJudgeRatio,
 		initialIntensity:     defaultInitialIntensity,
 		stepIntensity:        defaultStepIntensity,
 		checkPeriodInSeconds: defaultCheckPeriodInSeconds,

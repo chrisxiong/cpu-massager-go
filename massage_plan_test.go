@@ -33,11 +33,11 @@ func TestAddACPUsageRecordAndNeedMassage(t *testing.T) {
 	mp := massagePlan{
 		isStarted: false,
 		opts: options{
-			cpusageCollector: mockCollector,
-			highLoadLevel:    CounterTypeFifty,
-			highLoadRatio:    0.6,
-			initialIntensity: 50,
-			stepIntensity:    10,
+			cpusageCollector:     mockCollector,
+			highLoadLevel:        CounterTypeFifty,
+			loadStatusJudgeRatio: 0.6,
+			initialIntensity:     50,
+			stepIntensity:        10,
 		},
 		cpusageRecorder:  cpusageRecorder{},
 		currentState:     stateRelaxed{},
@@ -192,7 +192,7 @@ func TestIsLowLoadDurationExceedCheckPeriod(t *testing.T) {
 			checkPeriodInSeconds: uint(periodInSecond),
 		},
 	}
-	assert.Truef(t, mp.IsLowLoadDurationExceedCheckPeriod(),
+	assert.Truef(t, mp.IsSafeLoadDurationExceedCheckPeriod(),
 		"curTime:%v, oldestTiredTime:%v, period:%v",
 		mp.currentCPUsageRecordTime, mp.oldestTiredTime,
 		mp.currentCPUsageRecordTime.Sub(mp.oldestTiredTime))

@@ -24,8 +24,10 @@ func (s stateTired) AddACPUsageRecord(p *massagePlan) {
 		if p.IsHighLoadDurationExceedCheckPeriod() {
 			p.IncreaseIntensity()
 		}
-	} else {
-		if p.IsLowLoadDurationExceedCheckPeriod() {
+	}
+
+	if p.IsSafeLoad() {
+		if p.IsSafeLoadDurationExceedCheckPeriod() {
 			p.DecreaseIntensity()
 		}
 	}
