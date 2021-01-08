@@ -11,10 +11,14 @@ import (
 )
 
 func doBenchMark(totalTaskNum int, routineNum int, tired bool) {
+	dockerCollector, err := cpumassager.NewDockerCPUsageCollector()
+	if err != nil {
+		panic(err)
+	}
 	var mode string
 	if !tired {
 		mode = "relax"
-		err := cpumassager.StartMassagePlan()
+		err := cpumassager.StartMassagePlan(cpumassager.WithCPUSageCollector(dockerCollector))
 		if err != nil {
 			fmt.Printf("StartMassagePlan error:%s", err.Error())
 			os.Exit(1)
@@ -26,16 +30,17 @@ func doBenchMark(totalTaskNum int, routineNum int, tired bool) {
 	} else {
 		mode = "tired"
 		const defaultHighLoadLevel = cpumassager.CounterTypeZero
-		const defaultHighLoadRatio = 0.01
+		const defaultHighLoadRatio = 0.11
 		const defaultCheckPeriodInSeconds = 1
-		err := cpumassager.StartMassagePlan(cpumassager.WithHighLoadLevel(defaultHighLoadLevel),
-			cpumassager.WithHighLoadRatio(defaultHighLoadRatio),
+		err := cpumassager.StartMassagePlan(cpumassager.WithCPUSageCollector(dockerCollector),
+			cpumassager.WithHighLoadLevel(defaultHighLoadLevel),
+			cpumassager.WithLoadStatusJudgeRatio(defaultHighLoadRatio),
 			cpumassager.WithCheckPeriodInseconds(defaultCheckPeriodInSeconds))
 		if err != nil {
 			fmt.Printf("StartMassagePlan error:%s\n", err.Error())
 			os.Exit(1)
 		}
-		time.Sleep(2*time.Second + 100*time.Microsecond)
+		time.Sleep(12*time.Second + 100*time.Microsecond)
 		if !cpumassager.NeedMassage() {
 			fmt.Println("should need massage...")
 			os.Exit(1)
