@@ -12,7 +12,8 @@ const (
 	nanoSecondsPerSecond = 1e9
 )
 
-var cpuNum = 0
+var hostCPUNum = 1
+var containerCPUNum = 1.0
 
 // dockerCPUData linux系统docker环境下的CPU使用率相关数据
 type dockerCPUData struct {
@@ -42,6 +43,32 @@ func getCPUNum() (int, error) {
 		return 0, fmt.Errorf("ReadFile:%s, error:%s", usageFile, err.Error())
 	}
 	return len(strings.Fields(string(v))), nil
+}
+
+// getContainerCPUNumWithCFS CFS作SHCED_NORMAL的CPU使用率控制机制，被docker推荐使用
+// SCHED_RT未支持
+func getContainerCPUNumWithCFS() float64 {
+	const cfsQuotaFile = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
+	cfsQuota, err := ioutil.ReadFile(cfsQuotaFile)
+	if err != nil {
+		return float64(hostCPUNum)
+	}
+	cfsQuotaUS, err := strconv.ParseFloat(strings.TrimSpace(string(cfsQuota)), 64)
+	if cfsQuotaUS < 0 {
+		return float64(hostCPUNum)
+	}
+
+	const cfsPeriodFile = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
+	cfsPeriod, err := ioutil.ReadFile(cfsPeriodFile)
+	if err != nil {
+		return float64(hostCPUNum)
+	}
+	cfsPeriodUS, err := strconv.ParseFloat(strings.TrimSpace(string(cfsPeriod)), 64)
+	if cfsPeriodUS < 0 {
+		return float64(hostCPUNum)
+	}
+
+	return cfsQuotaUS / cfsPeriodUS
 }
 
 // getCurDockerCPUData 获取当前的docker CPUData
@@ -84,7 +111,7 @@ func (c *dockerCPUsageCollector) GetCPUsage() float64 {
 	)
 
 	if dockerDelta > 0.0 && systemDelta > 0.0 {
-		cpuPercent = (dockerDelta / systemDelta) * float64(cpuNum) * 100.0
+		cpuPercent = (dockerDelta / systemDelta) * float64(hostCPUNum) * 100.0 / containerCPUNum
 	}
 	c.lastCPUData = c.curCPUData
 
@@ -98,10 +125,11 @@ func NewDockerCPUsageCollector() (CPUsageCollector, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getCurDockerCPUData error:%s", err.Error())
 	}
-	cpuNum, err = getCPUNum()
+	hostCPUNum, err = getCPUNum()
 	if err != nil {
 		return nil, fmt.Errorf("getCPUNum error:%s", err.Error())
 	}
+	containerCPUNum = getContainerCPUNumWithCFS()
 	c.lastCPUData = curDockerCPUData
 	return c, nil
 }
